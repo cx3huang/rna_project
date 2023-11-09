@@ -2,16 +2,17 @@ import pandas as pd
 import numpy as np
 import torch
 from torch.utils.data import Dataset
+from sklearn.model_selection import train_test_split, KFold
 
 class RNADataset(Dataset):
-    def __init__(self, df, mode='train', **kwargs):
+    def __init__(self, df, mode='train', fold=0, n_folds=4, **kwargs):
         self.bp_mapping = {'A': 0, 'C': 1, 'G': 2, 'U': 3}
         self.Lmax = 206
 
         df_2A3 = df.loc[df.experiment_type=='2A3_MaP']
         df_DMS = df.loc[df.experiment_type=='DMS_MaP']
 
-        '''TODO: implement dataset splitting'''
+        split = list(KFold(n_splits=n_folds, shuffle=True).split(df_2A3))[fold][0 if mode=='train' else 1]
         df_2A3 = df_2A3.iloc[split].reset_index(drop=True)
         df_DMS = df_DMS.iloc[split].reset_index(drop=True)
 
@@ -34,14 +35,17 @@ class RNADataset(Dataset):
         self.snr_2A3 = df_2A3['signal_to_noise'].values
         self.snr_DMS = df_DMS['signal_to_noise'].values
 
+
     def __len__(self):
         return len(self.seq)
     
     def __getitem__(self, idx):
         seq = self.seq[idx]
         seq = np.array([self.seq_map[s] for s in seq])
-        
         seq = np.pad(seq,(0,self.Lmax-len(seq)))
+
+        mask = torch.zeros(self.Lmax, dtype=torch.bool)
+        mask[:len(seq)] = True
         
         reactivity = torch.from_numpy(np.stack([self.react_2A3[idx],
                                            self.react_DMS[idx]],-1))
@@ -52,7 +56,8 @@ class RNADataset(Dataset):
         return {'seq':torch.from_numpy(seq), \
                 'reactivity': reactivity, \
                 'reactivity_err': reactivity_err, \
-                'snr':snr}
+                'snr':snr, \
+                'mask': mask}
     
 
 class RNADataLoader:
