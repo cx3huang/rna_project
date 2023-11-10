@@ -1,2 +1,4 @@
 model_architecture_notes.txt
 __pycache__/
+.vscode/
+data/

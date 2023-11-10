@@ -1,5 +1,5 @@
 from model import RNAModel, loss
-from dataset import RNADataLoader, RNADataset
+from dataset import RNADataset
 
 import torch
 from torch.utils.data import DataLoader
@@ -8,14 +8,9 @@ import numpy as np
 import scipy
 import pandas as pd
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
-df = pd.read_csv('data/clean_train_data.csv')
 
-nfolds = 4
-num_workers = 5
-LEARNING_RATE = 1e-4
-DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-NUM_EPOCHS = 5
 
 def train(model, train_loader, loss_fn, optimizer, epoch=-1):
     total_loss = 0
@@ -25,7 +20,7 @@ def train(model, train_loader, loss_fn, optimizer, epoch=-1):
 
     model = model.to(DEVICE)
     model.train()  # Set model in training mode
-    for i, (inputs, targets, mask) in enumerate(train_loader):
+    for i, (inputs, targets, mask) in tqdm(enumerate(train_loader)):
         optimizer.zero_grad()
         inputs, targets, mask = inputs.to(DEVICE), targets.to(DEVICE), mask.to(DEVICE)
         outputs = model(inputs, mask)
@@ -82,44 +77,60 @@ def test(model, test_loader, loss_fn, epoch=-1):
     print(f"Epoch {epoch + 1} done. Average test loss = {final_loss:.2f}")
     return final_loss
 
+if __name__ == '__main__':
+    df = pd.read_csv('rna_project/data/train_data.csv')
+
+    nfolds = 4
+    num_workers = 12
+    batch_size = 128
+    LEARNING_RATE = 1e-4
+    DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    print(DEVICE)
+    NUM_EPOCHS = 5
+    show = True
 
 
-for fold in [0]:
-    train_dataset = RNADataset(df, mode='train', fold=fold, nfolds=nfolds)
-    train_loader = RNADataLoader(DataLoader(train_dataset, num_workers=num_workers, batch_size=32), device=device)
+    for fold in [0]:
+        train_dataset = RNADataset(df, mode='train', fold=fold, nfolds=nfolds)
+        train_loader = DataLoader(train_dataset, num_workers=num_workers, batch_size=batch_size, shuffle=True)
 
-    test_dataset = RNADataset(df, mode='eval', fold=fold, n_folds=nfolds)
-    test_loader = RNADataLoader(DataLoader(test_dataset, num_workers=num_workers, batch_size=32), device=device)
+        test_dataset = RNADataset(df, mode='eval', fold=fold, n_folds=nfolds)
+        test_loader = DataLoader(test_dataset, num_workers=num_workers, batch_size=batch_size, shuffle=False)
 
-    model = RNAModel()
-    model = model.to(DEVICE)
+        model = RNAModel()
+        model = model.to(DEVICE)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+        optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
-    train_losses = []
-    test_losses = []
+        train_losses = []
+        test_losses = []
 
-    for epoch in range(NUM_EPOCHS):
-        train_loss = train(model, train_loader, loss, optimizer, epoch)
-        test_loss= test(model, test_loader, loss, epoch)
+        for epoch in range(NUM_EPOCHS):
+            train_loss = train(model, train_loader, loss, optimizer, epoch)
+            test_loss= test(model, test_loader, loss, epoch)
 
-        train_losses.append(train_loss)
-        test_losses.append(test_loss)
+            train_losses.append(train_loss)
+            test_losses.append(test_loss)
 
-    model.eval()
-    with torch.no_grad():
-        (inputs, targets, mask) = next(iter(test_loader))
-        outputs = model(inputs, mask)
+        if show:
+            model.eval()
+            with torch.no_grad():
+                (inputs, targets, mask) = next(iter(test_loader))
+                outputs = model(inputs, mask)
 
-    i = 0
-    m = mask[i, :].cpu().numpy()
-    tgt = targets[i, :].cpu().numpy()
-    y = outputs[i, :].cpu().numpy()
+            i = 0
+            m = mask[i, :].cpu().numpy()
+            tgt = targets[i, :].cpu().numpy()
+            y = outputs[i, :].cpu().numpy()
 
-    plt.plot(tgt[~m], label="Target")
-    plt.plot(y[~m], label="Prediction")
-    plt.legend()
-    plt.title("Model prediction after training")
-    plt.show()
+            plt.plot(tgt[~m], label="Target")
+            plt.plot(y[~m], label="Prediction")
+            plt.legend()
+            plt.title("Model prediction after training")
+            plt.show()
 
-    torch.save(model.state_dict(), 'model_' + str(fold) + '.pth')
+        torch.save(model.state_dict(), 'model_' + str(fold) + '.pth')
+
+
+# rna_dataset = RNADataset(df)
+# X_train, X_test, y_train, y_test = train_test_split(df[''], np.concatenate([rna_dataset.react_2A3, rna_dataset.react_DMS], axis=-1), test_size=0.20, random_state=42)

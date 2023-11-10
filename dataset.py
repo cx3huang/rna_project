@@ -41,7 +41,7 @@ class RNADataset(Dataset):
     
     def __getitem__(self, idx):
         seq = self.seq[idx]
-        seq = np.array([self.seq_map[s] for s in seq])
+        seq = np.array([self.bp_mapping[s] for s in seq])
         seq = np.pad(seq,(0,self.Lmax-len(seq)))
 
         mask = torch.zeros(self.Lmax, dtype=torch.bool)
@@ -51,23 +51,24 @@ class RNADataset(Dataset):
                                            self.react_DMS[idx]],-1))
         reactivity_err = torch.from_numpy(np.stack([self.react_err_2A3[idx],
                                                self.react_err_DMS[idx]],-1))
-        snr = torch.FloatTensor([self.snr_2A3[idx],self.snr_DMS[idx]])
+        snr = torch.FloatTensor([self.snr_2A3[idx], self.snr_DMS[idx]])
         
-        return {'seq':torch.from_numpy(seq), \
-                'reactivity': reactivity, \
-                'reactivity_err': reactivity_err, \
-                'snr':snr, \
-                'mask': mask}
+        # return {'seq':torch.from_numpy(seq), \
+        #         'reactivity': reactivity, \
+        #         'reactivity_err': reactivity_err, \
+        #         'snr':snr, \
+        #         'mask': mask}
+        return torch.from_numpy(seq), reactivity, mask
     
 
-class RNADataLoader:
-    def __init__(self, dataloader, device='cuda:0'):
-        self.dataloader = dataloader
-        self.device = device
+# class RNADataLoader:
+#     def __init__(self, dataloader, device='cuda:0'):
+#         self.dataloader = dataloader
+#         self.device = device
 
-    def __len__(self):
-        return len(self.dataloader)
+#     def __len__(self):
+#         return len(self.dataloader)
 
-    def __iter__(self):
-        for batch in self.dataloader:
-            yield tuple({k: x[k].to(self.device) for k in x} for x in batch)
+#     def __iter__(self):
+#         for batch in self.dataloader:
+#             return tuple({k: x[k].to(self.device) for k in x} for x in batch)
