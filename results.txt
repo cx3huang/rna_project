@@ -1,0 +1,11 @@
+epoch 50, lr 10e-4, num_workers 12, batch 200:
+    initial test loss = 0.23
+    final test loss = 0.16
+
+epoch 75, lr 10e-4, num_workers 12, batch 200:
+    initial test loss = 0.23
+    final test loss = 0.15
+
+epoch 25, lr 10e-3, num_workers 8, batch 200:
+    initial test loss = 0.27
+    final test loss = 0.27

@@ -78,15 +78,15 @@ def test(model, test_loader, loss_fn, epoch=-1):
     return final_loss
 
 if __name__ == '__main__':
-    df = pd.read_csv('rna_project/data/train_data.csv')
+    df = pd.read_csv('train_data_QUICK_START.csv')
 
     nfolds = 4
     num_workers = 12
-    batch_size = 128
+    batch_size = 200
     LEARNING_RATE = 1e-4
     DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     print(DEVICE)
-    NUM_EPOCHS = 5
+    NUM_EPOCHS = 75
     show = True
 
 
@@ -116,20 +116,32 @@ if __name__ == '__main__':
             model.eval()
             with torch.no_grad():
                 (inputs, targets, mask) = next(iter(test_loader))
+                inputs = inputs.to(DEVICE)
+                targets = targets.to(DEVICE)
+                mask = mask.to(DEVICE)
                 outputs = model(inputs, mask)
 
             i = 0
             m = mask[i, :].cpu().numpy()
-            tgt = targets[i, :].cpu().numpy()
-            y = outputs[i, :].cpu().numpy()
+            tgt1 = targets[i, :, 0].cpu().numpy()
+            tgt2 = targets[i, :, 1].cpu().numpy()
+            y1 = outputs[i, :, 0].cpu().numpy()
+            y2 = outputs[i, :, 1].cpu().numpy()
 
-            plt.plot(tgt[~m], label="Target")
-            plt.plot(y[~m], label="Prediction")
-            plt.legend()
-            plt.title("Model prediction after training")
+            fig, (ax1, ax2) = plt.subplots(1,2)
+            fig.suptitle('Model predictions: 2A3 (left) & DMS (right)')
+
+            ### TODO: current mask is all true; need to verify which parts are actually true. ###
+            ax1.plot(tgt1[m], label="Target")
+            ax1.plot(y1[m], label="Prediction")
+            ax1.legend()
+            ax2.plot(tgt2[m], label="Target")
+            ax2.plot(y2[m], label="Prediction")
+            ax2.legend()
             plt.show()
 
-        torch.save(model.state_dict(), 'model_' + str(fold) + '.pth')
+        # torch.save(model.state_dict(), 'model_' + str(fold) + '.pth')
+        torch.save(model.state_dict(), 'model_' + 'e75-lrneg4' + '.pth')
 
 
 # rna_dataset = RNADataset(df)
