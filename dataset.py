@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader, BatchSampler
 from sklearn.model_selection import train_test_split, KFold
 
 class RNADataset(Dataset):
@@ -80,3 +80,41 @@ class RNADataset(Dataset):
 #     def __iter__(self):
 #         for batch in self.dataloader:
 #             return tuple({k: x[k].to(self.device) for k in x} for x in batch)
+
+
+class LengthMatchingBatchSampler(BatchSampler):
+    def __iter__(self):
+        buckets = [[]] * 100
+        yielded = 0
+
+        for i in self.sampler:
+            s = self.sampler.data_source[i]
+            # print(s)
+            L = s[2].sum()
+            L = max(1, L // 16) # embedding dimension
+
+            if len(buckets[L]) == 0:
+                buckets[L] = []
+            buckets[L].append(i)
+
+            if len(buckets[L]) == self.batch_size:
+                batch = list(buckets[L])
+                yield batch
+
+                yielded += 1
+                buckets[L] = []
+
+        batch = []
+        leftover = [i for b in buckets for i in b]
+
+        for i in leftover:
+            batch.append(i)
+            if len(batch) == self.batch_size:
+                yield batch
+
+                yielded += 1
+                batch = []
+
+        if len(batch) > 0 and not self.drop_last:
+            yield batch
+            yielded += 1

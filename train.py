@@ -1,14 +1,16 @@
 from model import RNAModel, loss
-from dataset import RNADataset
+from dataset import RNADataset, LengthMatchingBatchSampler
 
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from sklearn.model_selection import train_test_split
 import numpy as np
 import scipy
 import pandas as pd
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+import time
+import datetime
 
 
 
@@ -78,24 +80,39 @@ def test(model, test_loader, loss_fn, epoch=-1):
     return final_loss
 
 if __name__ == '__main__':
-    df = pd.read_csv('train_data_QUICK_START.csv')
+    df = pd.read_csv('data/train_data_QUICK_START.csv')
+    # df = pd.read_csv('rna_project/data/train_data_QUICK_START.csv')
 
-    nfolds = 4
-    num_workers = 12
-    batch_size = 200
+    NFOLDS = 4
+    NUM_WORKERS = 12
+    BATCH_SIZE = 200
     LEARNING_RATE = 1e-4
     DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     print(DEVICE)
-    NUM_EPOCHS = 75
-    show = True
+    NUM_EPOCHS = 10
+    SHOW = False
+    SAVE = False
 
-
+    st = time.time()
     for fold in [0]:
-        train_dataset = RNADataset(df, mode='train', fold=fold, nfolds=nfolds)
-        train_loader = DataLoader(train_dataset, num_workers=num_workers, batch_size=batch_size, shuffle=True)
+        # train_dataset = RNADataset(df, mode='train', fold=fold, nfolds=NFOLDS)
+        # train_loader = DataLoader(train_dataset, num_workers=NUM_WORKERS, batch_size=BATCH_SIZE, shuffle=True)
+        # test_dataset = RNADataset(df, mode='eval', fold=fold, n_folds=NFOLDS)
+        # test_loader = DataLoader(test_dataset, num_workers=NUM_WORKERS, batch_size=BATCH_SIZE, shuffle=False)
 
-        test_dataset = RNADataset(df, mode='eval', fold=fold, n_folds=nfolds)
-        test_loader = DataLoader(test_dataset, num_workers=num_workers, batch_size=batch_size, shuffle=False)
+        train_dataset = RNADataset(df, mode='train', fold=fold, nfolds=NFOLDS)
+        train_sampler = RandomSampler(train_dataset)
+        len_train_sampler = LengthMatchingBatchSampler(train_sampler, batch_size=BATCH_SIZE, drop_last=True)
+        train_loader = DataLoader(train_dataset, 
+                                  batch_sampler=len_train_sampler, 
+                                  num_workers=NUM_WORKERS)
+
+        test_dataset = RNADataset(df, mode='eval', fold=fold, n_folds=NFOLDS)
+        test_sampler = SequentialSampler(test_dataset)
+        len_test_sampler = LengthMatchingBatchSampler(test_sampler, batch_size=BATCH_SIZE, drop_last=True)
+        test_loader = DataLoader(test_dataset, 
+                                 batch_sampler=len_test_sampler,
+                                 num_workers=NUM_WORKERS)
 
         model = RNAModel()
         model = model.to(DEVICE)
@@ -112,7 +129,7 @@ if __name__ == '__main__':
             train_losses.append(train_loss)
             test_losses.append(test_loss)
 
-        if show:
+        if SHOW:
             model.eval()
             with torch.no_grad():
                 (inputs, targets, mask) = next(iter(test_loader))
@@ -140,9 +157,13 @@ if __name__ == '__main__':
             ax2.legend()
             plt.show()
 
-        # torch.save(model.state_dict(), 'model_' + str(fold) + '.pth')
-        torch.save(model.state_dict(), 'model_' + 'e75-lrneg4' + '.pth')
+        if SAVE:
+            # torch.save(model.state_dict(), 'model_' + str(fold) + '.pth')
+            torch.save(model.state_dict(), 'data/model_' + 'e50-lrneg4-lmbs' + '.pth')
 
+    end = time.time()
+    avg_elapsed = int(round((end - st)/NUM_EPOCHS))
+    print("Time per epoch: " + str(avg_elapsed // 60) + " mins " + str(avg_elapsed % 60) + " secs")
 
 # rna_dataset = RNADataset(df)
 # X_train, X_test, y_train, y_test = train_test_split(df[''], np.concatenate([rna_dataset.react_2A3, rna_dataset.react_DMS], axis=-1), test_size=0.20, random_state=42)

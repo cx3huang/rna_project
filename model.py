@@ -62,7 +62,7 @@ class RNAModel(nn.Module):
                                                     dim_feedforward=4*dim,
                                                     dropout=0.1,
                                                     activation=nn.GELU(),
-                                                    batch_first=True,)
+                                                    batch_first=True)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer=encoder_layers, num_layers=depth)
         
         self.output_norm = nn.LayerNorm(dim)
