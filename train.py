@@ -1,5 +1,5 @@
 from model import RNAModel
-from dataset import RNADataset, LengthMatchingBatchSampler, LengthSortedBatchSampler
+from dataset import RNADataset, LengthMatchingBatchSampler
 import torch.nn.functional as F
 import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
