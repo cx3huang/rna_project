@@ -2,7 +2,6 @@ import math
 import pandas as pd
 import numpy as np
 import torch
-import torch.nn.functional as F
 from torch import Tensor
 import torch.nn as nn
 
@@ -70,6 +69,7 @@ class RNAModel(nn.Module):
 
     def forward(self, x, padding_mask):
         Lmax = padding_mask.sum(-1).max()
+        # Lmax = 206
         m = padding_mask[:,:Lmax]
         x = x[:,:Lmax]
 
@@ -86,13 +86,5 @@ class RNAModel(nn.Module):
         x = self.linear(x)
         # x = x.squeeze()
         return x
-        
 
-def loss(pred, target, mask):
-    p = pred[mask[:,:pred.shape[1]]]
-    y = target[mask].clip(0,1)
-    loss = F.l1_loss(p, y, reduction='none')
-    loss = loss[~torch.isnan(loss)].mean()
-    
-    return loss
 

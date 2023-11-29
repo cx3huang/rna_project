@@ -1,6 +1,6 @@
-from model import RNAModel, loss
-from dataset import RNADataset, LengthMatchingBatchSampler
-
+from model import RNAModel
+from dataset import RNADataset, LengthMatchingBatchSampler, LengthSortedBatchSampler
+import torch.nn.functional as F
 import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from sklearn.model_selection import train_test_split
@@ -12,6 +12,14 @@ from tqdm import tqdm
 import time
 import datetime
 
+
+def loss(pred, target, mask):
+    p = pred[mask[:,:pred.shape[1]]]
+    y = target[mask].clip(0,1)
+    loss = F.l1_loss(p, y, reduction='none')
+    loss = loss[~torch.isnan(loss)].mean()
+    
+    return loss
 
 
 def train(model, train_loader, loss_fn, optimizer, epoch=-1):
@@ -32,13 +40,15 @@ def train(model, train_loader, loss_fn, optimizer, epoch=-1):
 
         # Track some values to compute statistics
         total_loss += loss.item()
+        all_predictions.append(outputs.detach().cpu().numpy())
+        all_targets.append(targets.detach().cpu().numpy())
 
         # Save loss every 100 batches
         if (i % 100 == 0) and (i > 0):
             running_loss = total_loss / (i + 1)
             loss_history.append(running_loss)
             # print(f"Epoch {epoch + 1}, batch {i + 1}: loss = {running_loss:.2f}")
-
+    
     final_loss = total_loss / len(train_loader)
     # Print average loss and accuracy
     print(f"Epoch {epoch + 1} done. Average train loss = {final_loss:.2f}")
@@ -73,11 +83,33 @@ def test(model, test_loader, loss_fn, epoch=-1):
 
             # Track some values to compute statistics
             total_loss += loss.item()
+            all_predictions.append(outputs.detach().cpu().numpy())
+            all_targets.append(targets.detach().cpu().numpy())
 
     final_loss = total_loss / len(test_loader)
     # Print average loss and accuracy
     print(f"Epoch {epoch + 1} done. Average test loss = {final_loss:.2f}")
     return final_loss
+
+
+class EarlyStopper:
+    def __init__(self, patience=5, min_delta=0):
+        self.patience = patience
+        self.min_delta = min_delta
+        
+        self.counter = 0
+        self.min_val_loss = float('inf')
+
+    def early_stop(self, val_loss):
+        if(val_loss < self.min_val_loss):
+            self.min_val_loss = val_loss
+            self.counter = 0
+        elif(val_loss > self.min_val_loss + self.min_delta):
+            self.counter += 1
+            if self.counter >= self.patience: return True
+        
+        return False
+
 
 if __name__ == '__main__':
     df = pd.read_csv('data/train_data_QUICK_START.csv')
@@ -89,8 +121,8 @@ if __name__ == '__main__':
     LEARNING_RATE = 1e-4
     DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     print(DEVICE)
-    NUM_EPOCHS = 10
-    SHOW = False
+    NUM_EPOCHS = 1
+    SHOW = True
     SAVE = False
 
     st = time.time()
@@ -101,15 +133,13 @@ if __name__ == '__main__':
         # test_loader = DataLoader(test_dataset, num_workers=NUM_WORKERS, batch_size=BATCH_SIZE, shuffle=False)
 
         train_dataset = RNADataset(df, mode='train', fold=fold, nfolds=NFOLDS)
-        train_sampler = RandomSampler(train_dataset)
-        len_train_sampler = LengthMatchingBatchSampler(train_sampler, batch_size=BATCH_SIZE, drop_last=True)
+        len_train_sampler = LengthMatchingBatchSampler(RandomSampler(train_dataset), batch_size=BATCH_SIZE, drop_last=True)
         train_loader = DataLoader(train_dataset, 
                                   batch_sampler=len_train_sampler, 
                                   num_workers=NUM_WORKERS)
 
         test_dataset = RNADataset(df, mode='eval', fold=fold, n_folds=NFOLDS)
-        test_sampler = SequentialSampler(test_dataset)
-        len_test_sampler = LengthMatchingBatchSampler(test_sampler, batch_size=BATCH_SIZE, drop_last=True)
+        len_test_sampler = LengthMatchingBatchSampler(SequentialSampler(test_dataset), batch_size=BATCH_SIZE, drop_last=True)
         test_loader = DataLoader(test_dataset, 
                                  batch_sampler=len_test_sampler,
                                  num_workers=NUM_WORKERS)
@@ -119,15 +149,21 @@ if __name__ == '__main__':
 
         optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
+        early_stopper = EarlyStopper(patience=5, min_delta=0.05)
+
         train_losses = []
         test_losses = []
 
         for epoch in range(NUM_EPOCHS):
             train_loss = train(model, train_loader, loss, optimizer, epoch)
-            test_loss= test(model, test_loader, loss, epoch)
+            test_loss = test(model, test_loader, loss, epoch)
 
             train_losses.append(train_loss)
             test_losses.append(test_loss)
+
+            if(early_stopper.early_stop(test_loss)):
+                print('No more patience, early stopping on epoch # ' + str(epoch))
+                break
 
         if SHOW:
             model.eval()
@@ -139,22 +175,28 @@ if __name__ == '__main__':
                 outputs = model(inputs, mask)
 
             i = 0
-            m = mask[i, :].cpu().numpy()
-            tgt1 = targets[i, :, 0].cpu().numpy()
-            tgt2 = targets[i, :, 1].cpu().numpy()
-            y1 = outputs[i, :, 0].cpu().numpy()
-            y2 = outputs[i, :, 1].cpu().numpy()
+            m = mask[i, :].detach().cpu().numpy()
+            tgt1 = targets[i, :, 0].detach().cpu().numpy()
+            tgt2 = targets[i, :, 1].detach().cpu().numpy()
+            y1 = outputs[i, :, 0].detach().cpu().numpy()
+            y2 = outputs[i, :, 1].detach().cpu().numpy()
 
             fig, (ax1, ax2) = plt.subplots(1,2)
             fig.suptitle('Model predictions: 2A3 (left) & DMS (right)')
 
-            ### TODO: current mask is all true; need to verify which parts are actually true. ###
             ax1.plot(tgt1[m], label="Target")
-            ax1.plot(y1[m], label="Prediction")
+            ax1.plot(y1, label="Prediction")
             ax1.legend()
             ax2.plot(tgt2[m], label="Target")
-            ax2.plot(y2[m], label="Prediction")
+            ax2.plot(y2, label="Prediction")
             ax2.legend()
+            plt.show()
+
+            plt.plot(train_losses, label='train')
+            plt.plot(test_losses, label='test')
+            plt.ylabel('Accuracy')
+            plt.xlabel('Epoch')
+            plt.legend(loc='upper left')
             plt.show()
 
         if SAVE:

@@ -3,6 +3,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader, BatchSampler
 from sklearn.model_selection import train_test_split, KFold
+import random
 
 class RNADataset(Dataset):
     def __init__(self, df, mode='train', fold=0, n_folds=4, **kwargs):
@@ -23,14 +24,10 @@ class RNADataset(Dataset):
         self.seq = df_2A3['sequence'].values
         
 
-        self.react_2A3 = df_2A3[[c for c in df_2A3.columns if \
-                                 'reactivity_0' in c]].values
-        self.react_DMS = df_DMS[[c for c in df_DMS.columns if \
-                                 'reactivity_0' in c]].values
-        self.react_err_2A3 = df_2A3[[c for c in df_2A3.columns if \
-                                 'reactivity_error_0' in c]].values
-        self.react_err_DMS = df_DMS[[c for c in df_DMS.columns if \
-                                'reactivity_error_0' in c]].values
+        self.react_2A3 = df_2A3[[c for c in df_2A3.columns if 'reactivity_0' in c]].values
+        self.react_DMS = df_DMS[[c for c in df_DMS.columns if 'reactivity_0' in c]].values
+        self.react_err_2A3 = df_2A3[[c for c in df_2A3.columns if 'reactivity_error_0' in c]].values
+        self.react_err_DMS = df_DMS[[c for c in df_DMS.columns if 'reactivity_error_0' in c]].values
         
         # self.snr_2A3 = df_2A3['signal_to_noise'].values
         # self.snr_DMS = df_DMS['signal_to_noise'].values
@@ -50,9 +47,11 @@ class RNADataset(Dataset):
 
         s2A3 = self.react_2A3[idx]
         s2A3[s2A3 < 0] = 0
+        s2A3[np.isnan(s2A3)] = 0
 
         sDMS = self.react_DMS[idx]
         sDMS[sDMS < 0] = 0
+        sDMS[np.isnan(sDMS)] = 0
 
         # reactivity = torch.from_numpy(np.stack([self.react_2A3[idx],
         #                                    self.react_DMS[idx]],-1))
@@ -67,19 +66,6 @@ class RNADataset(Dataset):
         #         'snr':snr, \
         #         'mask': mask}
         return torch.from_numpy(seq), reactivity, mask
-    
-
-# class RNADataLoader:
-#     def __init__(self, dataloader, device='cuda:0'):
-#         self.dataloader = dataloader
-#         self.device = device
-
-#     def __len__(self):
-#         return len(self.dataloader)
-
-#     def __iter__(self):
-#         for batch in self.dataloader:
-#             return tuple({k: x[k].to(self.device) for k in x} for x in batch)
 
 
 class LengthMatchingBatchSampler(BatchSampler):
@@ -118,3 +104,25 @@ class LengthMatchingBatchSampler(BatchSampler):
         if len(batch) > 0 and not self.drop_last:
             yield batch
             yielded += 1
+
+
+class LengthSortedBatchSampler(BatchSampler):
+    def __iter__(self):
+        yielded = 0
+
+        # samples = sorted(self.sampler.data_source, key=lambda x: x[2].sum())s
+        sample_idx = sorted(range(len(self.sampler.data_source)), key=lambda x : self.sampler.data_source[x][2].sum())
+
+        for i in range(0, len(sample_idx), self.batch_size):
+            if(i + self.batch_size > len(sample_idx) and self.drop_last):
+                break
+            elif(i + self.batch_size > len(sample_idx)):
+                batch = sample_idx[i:]
+            else:
+                batch = sample_idx[i:(i + self.batch_size)]
+            
+            yield batch
+            yielded += 1
+        
+        # print('Shortest sample:', samples[0][2].sum())
+        # print('Longest sample:', samples[-1][2].sum())
