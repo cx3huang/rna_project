@@ -88,11 +88,3 @@ class RNAModel(nn.Module):
         return x
         
 
-def loss(pred, target, mask):
-    p = pred[mask[:,:pred.shape[1]]]
-    y = target[mask].clip(0,1)
-    loss = F.l1_loss(p, y, reduction='none')
-    loss = loss[~torch.isnan(loss)].mean()
-    
-    return loss
-
