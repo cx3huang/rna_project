@@ -117,7 +117,7 @@ if __name__ == '__main__':
     LEARNING_RATE = 1e-4
     DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     print(DEVICE)
-    NUM_EPOCHS = 1
+    NUM_EPOCHS = 10
     SHOW = True
     SAVE = False
 
