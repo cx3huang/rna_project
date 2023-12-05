@@ -9,3 +9,10 @@ epoch 75, lr 10e-4, num_workers 12, batch 200:
 epoch 25, lr 10e-3, num_workers 8, batch 200:
     initial test loss = 0.27
     final test loss = 0.27
+
+
+
+Trial 0 finished with value: 0.0920187731489993 and parameters: {'learning_rate': 0.0001, 'batch_size': 64, 'dim': 192}. Best is trial 0 with value: 0.0920187731489993.
+
+
+[I 2023-11-29 19:57:01,130] Trial 1 finished with value: 0.10408463509327637 and parameters: {'learning_rate': 0.0001, 'batch_size': 150}. Best is trial 1 with value: 0.10408463509327637.

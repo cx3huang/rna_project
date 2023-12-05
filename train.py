@@ -117,15 +117,14 @@ if __name__ == '__main__':
 
     NFOLDS = 4
     NUM_WORKERS = 12
-    BATCH_SIZE = 200
+    BATCH_SIZE = 16
     LEARNING_RATE = 1e-4
     DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     print(DEVICE)
-    NUM_EPOCHS = 1
+    NUM_EPOCHS = 50
     SHOW = True
-    SAVE = False
+    SAVE = True
 
-    st = time.time()
     for fold in [0]:
         # train_dataset = RNADataset(df, mode='train', fold=fold, nfolds=NFOLDS)
         # train_loader = DataLoader(train_dataset, num_workers=NUM_WORKERS, batch_size=BATCH_SIZE, shuffle=True)
@@ -144,16 +143,16 @@ if __name__ == '__main__':
                                  batch_sampler=len_test_sampler,
                                  num_workers=NUM_WORKERS)
 
-        model = RNAModel()
+        model = RNAModel(dim=256, depth=9, head_size=32)
         model = model.to(DEVICE)
 
         optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
-        early_stopper = EarlyStopper(patience=5, min_delta=0.05)
+        early_stopper = EarlyStopper(patience=5, min_delta=0.01)
 
         train_losses = []
         test_losses = []
-
+        st = time.time()
         for epoch in range(NUM_EPOCHS):
             train_loss = train(model, train_loader, loss, optimizer, epoch)
             test_loss = test(model, test_loader, loss, epoch)
@@ -164,6 +163,9 @@ if __name__ == '__main__':
             if(early_stopper.early_stop(test_loss)):
                 print('No more patience, early stopping on epoch # ' + str(epoch))
                 break
+
+        end = time.time()
+        avg_elapsed = int(round((end - st)/NUM_EPOCHS))
 
         if SHOW:
             model.eval()
@@ -194,17 +196,15 @@ if __name__ == '__main__':
 
             plt.plot(train_losses, label='train')
             plt.plot(test_losses, label='test')
-            plt.ylabel('Accuracy')
+            plt.ylabel('Loss')
             plt.xlabel('Epoch')
             plt.legend(loc='upper left')
             plt.show()
 
         if SAVE:
             # torch.save(model.state_dict(), 'model_' + str(fold) + '.pth')
-            torch.save(model.state_dict(), 'data/model_' + 'e50-lrneg4-lmbs' + '.pth')
-
-    end = time.time()
-    avg_elapsed = int(round((end - st)/NUM_EPOCHS))
+            torch.save(model.state_dict(), 'models/final_model_e50.pth')
+    
     print("Time per epoch: " + str(avg_elapsed // 60) + " mins " + str(avg_elapsed % 60) + " secs")
 
 # rna_dataset = RNADataset(df)
